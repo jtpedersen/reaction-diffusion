@@ -36,5 +36,7 @@ double reaction_diffusion_system_get(reaction_diffusion_system *system, double *
 
 void reaction_diffusion_system_set(reaction_diffusion_system *system, double *m, size_t x, size_t y, double v);
 
+double reaction_diffusion_system_get_no_bounds_check(reaction_diffusion_system *system, double *m, size_t x, size_t y);
+
 #endif
 

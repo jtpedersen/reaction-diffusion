@@ -39,17 +39,18 @@ void reaction_diffusion_system_free(reaction_diffusion_system *s) {
 void calculate_laplacian(reaction_diffusion_system *s, double *from, double *to) {
     double v;
 
-    for (int x = 0; x < s->width; x++) {
-        for (int y = 0; y < s->height; y++) {
-            v = .05 * reaction_diffusion_system_get(s, from, x-1, y-1) +
-                .2  * reaction_diffusion_system_get(s, from, x-1, y  ) +
-                .05 * reaction_diffusion_system_get(s, from, x-1, y+1) +
-                .2  * reaction_diffusion_system_get(s, from, x  , y-1) +
-                -1. * reaction_diffusion_system_get(s, from, x  , y  ) +
-                .2  * reaction_diffusion_system_get(s, from, x  , y+1) +
-                .05 * reaction_diffusion_system_get(s, from, x+1, y-1) +
-                .2  * reaction_diffusion_system_get(s, from, x+1, y  ) +
-                .05 * reaction_diffusion_system_get(s, from, x+1, y+1);
+//#pragma omp parallel 
+    for (int y = 1; y < s->height-1; y++) {
+	for (int x = 1; x < s->width-1; x++) {
+            v = .05 * reaction_diffusion_system_get_no_bounds_check(s, from, x-1, y-1) +
+                .2  * reaction_diffusion_system_get_no_bounds_check(s, from, x-1, y  ) +
+                .05 * reaction_diffusion_system_get_no_bounds_check(s, from, x-1, y+1) +
+                .2  * reaction_diffusion_system_get_no_bounds_check(s, from, x  , y-1) +
+                -1. * reaction_diffusion_system_get_no_bounds_check(s, from, x  , y  ) +
+                .2  * reaction_diffusion_system_get_no_bounds_check(s, from, x  , y+1) +
+                .05 * reaction_diffusion_system_get_no_bounds_check(s, from, x+1, y-1) +
+                .2  * reaction_diffusion_system_get_no_bounds_check(s, from, x+1, y  ) +
+                .05 * reaction_diffusion_system_get_no_bounds_check(s, from, x+1, y+1);
             reaction_diffusion_system_set(s, to, x, y, v);
         }
     }
@@ -57,37 +58,36 @@ void calculate_laplacian(reaction_diffusion_system *s, double *from, double *to)
 
 
 void reaction_diffusion_system_update(reaction_diffusion_system *s, double dt) {
-    double *temp;
-
     // write laplacians calculation to swaps
     calculate_laplacian(s, s->U, s->swapU);
     calculate_laplacian(s, s->V, s->swapV);
 
+    /* allocate temporary buffers */
+    double *tmp_u = malloc(sizeof(double) * (s->width * s->height) );
+    double *tmp_v = malloc(sizeof(double) * (s->width * s->height) );
+
     // calculate new concentrations, and write the new value to swaps
-    for (int x = 0; x < s->width; x++) {
-        for (int y = 0; y < s->height; y++) {
-            double u = reaction_diffusion_system_get(s, s->U, x, y);
-            double v = reaction_diffusion_system_get(s, s->V, x, y);
-            double deltaU = s->du*reaction_diffusion_system_get(s, s->swapU, x, y)
+//#pragma omp parallel slows down due to access conflicts/locs - i guesss...
+    for (int y = 1; y < s->height-1; y++) {
+	for (int x = 1; x < s->width-1; x++) {
+            double u = reaction_diffusion_system_get_no_bounds_check(s, s->U, x, y);
+            double v = reaction_diffusion_system_get_no_bounds_check(s, s->V, x, y);
+            double deltaU = s->du*reaction_diffusion_system_get_no_bounds_check(s, s->swapU, x, y)
                             - (u * v * v)
                             + s->f*(1. - u);
-            double deltaV = s->dv*reaction_diffusion_system_get(s, s->swapV, x, y)
+            double deltaV = s->dv*reaction_diffusion_system_get_no_bounds_check(s, s->swapV, x, y)
                             + (u * v * v)
                             - (s->k + s->f)*v;
 
-            reaction_diffusion_system_set(s, s->swapU, x, y, u + deltaU*dt);
-            reaction_diffusion_system_set(s, s->swapV, x, y, v + deltaV*dt);
+            reaction_diffusion_system_set(s, tmp_u, x, y, u + deltaU*dt);
+            reaction_diffusion_system_set(s, tmp_v, x, y, v + deltaV*dt);
         }
     }
 
-    // swap
-    temp = s->U;
-    s->U = s->swapU;
-    s->swapU = temp;
-
-    temp = s->V;
-    s->V = s->swapV;
-    s->swapV = temp;
+    free(s->U);
+    free(s->V);
+    s->U = tmp_u;
+    s->V = tmp_v;
 }
 
 double reaction_diffusion_system_get(reaction_diffusion_system *s, double *m, size_t x, size_t y) {
@@ -102,3 +102,6 @@ void reaction_diffusion_system_set(reaction_diffusion_system *s, double *m, size
     m[y*s->width + x] = fmin(1, fmax(-1, v));
 }
 
+double reaction_diffusion_system_get_no_bounds_check(reaction_diffusion_system *s, double *m, size_t x, size_t y) {
+    return m[y*s->width + x];
+}
