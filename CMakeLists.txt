@@ -2,11 +2,23 @@ cmake_minimum_required (VERSION 2.8)
 project (ReactDiffuse)
 set(VERSION "0.1.0")
 
+#in order for the lm flag to be last place it here before any sources
+if(UNIX)
+  link_libraries(m)
+endif(UNIX)
+
 # include paths
 include_directories(src)
 
 find_package(SDL REQUIRED)
 include_directories(${SDL_INCLUDE_DIR})
+SET(CMAKE_C_FLAGS "-std=c99")
+
+find_package(OpenMP)
+if (OPENMP_FOUND)
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "bin/")
 file(GLOB_RECURSE project_SOURCES "src/*.c")
@@ -35,6 +47,6 @@ if (MSVC)
                           LINK_FLAGS "/ENTRY:mainCRTStartup")
 endif()
 
-link_directories( /usr/local/lib )
+link_directories( /usr/include )
 target_link_libraries(ReactDiffuse ${SDL_LIBRARY})
 
